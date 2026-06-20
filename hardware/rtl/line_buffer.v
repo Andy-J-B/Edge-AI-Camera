@@ -1,3 +1,4 @@
+// line_buffer.v
 module line_buffer #(
     parameter int WIDTH = 640,
     parameter int DATA_WIDTH = 8
