@@ -60,4 +60,39 @@ module sobel_filter #(
       .pixel_out(lb2_valid)
   );
 
+  reg [DATA_WIDTH-1:0] p00, p01, p02;
+  reg [DATA_WIDTH-1:0] p10, p11, p12;
+  reg [DATA_WIDTH-1:0] p20, p21, p22;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      {p00, p01, p02, p10, p11, p12, p20, p21, p22} <= {9{1'b0}};
+    end else if (in_valid) begin
+      // horizontal shift
+      p00 <= p01;
+      p01 <= p02;
+      p02 <= lb2_pixel;
+      p10 <= p11;
+      p11 <= p12;
+      p12 <= lb1_pixel;
+      p20 <= p21;
+      p21 <= p22;
+      p22 <= pixel_in;
+    end
+  end
+
+  reg valid_delay1;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      valid_delay1 <= 1'b0;
+      out_valid <= 1'b0;
+    end else if (in_valid) begin
+      valid_delay1 <= lb2_valid;
+      out_valid <= valid_delay1;
+    end
+  end
+
+
+
 endmodule
