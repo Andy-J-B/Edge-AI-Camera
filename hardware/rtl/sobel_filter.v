@@ -1,11 +1,13 @@
 // sobel_filter.v
 
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 module sobel_filter #(
     parameter int WIDTH = 640,
     parameter int DATA_WIDTH = 8
 ) (
     input clk,
-    rst_n,
+    input rst_n,
     input in_valid,
     input [DATA_WIDTH-1:0] pixel_in,
     output reg [DATA_WIDTH-1:0] pixel_out,
@@ -66,7 +68,7 @@ module sobel_filter #(
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      {p00, p01, p02, p10, p11, p12, p20, p21, p22} <= {9{1'b0}};
+      {p00, p01, p02, p10, p11, p12, p20, p21, p22} <= 0;
     end else if (in_valid) begin
       // horizontal shift
       p00 <= p01;
