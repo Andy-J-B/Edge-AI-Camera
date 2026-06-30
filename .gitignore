@@ -1,4 +1,4 @@
 .DS_store
 .nvim
 build
-
+.cache
