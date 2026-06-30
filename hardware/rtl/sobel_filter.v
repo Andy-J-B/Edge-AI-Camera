@@ -93,6 +93,27 @@ module sobel_filter #(
     end
   end
 
+  reg signed [10:0] Gx;
+  reg signed [10:0] Gy;
+  reg signed [10:0] abs_Gx;
+  reg signed [10:0] abs_Gy;
+  reg signed [10:0] sum;
 
+  // Horizontal and vertical kernels
+  always @(posedge clk or negedge rst_n) begin
+    Gx <= (p02 + (p12 << 1) + p22) - (p00 + (p10 << 1) + p20);
+    Gy <= (p20 + (p21 << 1) + p22) - (p00 + (p01 << 1) + p02);
+
+    // abs
+    abs_Gx <= Gx;
+    abs_Gy <= Gy;
+    if (abs_Gx[10] == 1) abs_Gx[10] <= 0;
+    if (abs_Gy[10] == 1) abs_Gy[10] <= 0;
+    sum <= abs_Gx + abs_Gy;
+
+    if (sum > 255) sum <= 255;
+
+    if (in_valid) pixel_out <= sum;
+  end
 
 endmodule
