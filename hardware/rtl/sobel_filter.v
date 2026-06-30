@@ -99,21 +99,36 @@ module sobel_filter #(
   reg signed [10:0] abs_Gy;
   reg signed [10:0] sum;
 
+  reg [7:0] clamped_sum;
   // Horizontal and vertical kernels
+  always @(*) begin
+    Gx = (p02 + (p12 << 1) + p22) - (p00 + (p10 << 1) + p20);
+    Gy = (p20 + (p21 << 1) + p22) - (p00 + (p01 << 1) + p02);
+
+    if (Gx < 0) begin
+      abs_Gx = -Gx;
+    end else begin
+      abs_Gx = Gx;
+    end
+
+    if (Gy < 0) begin
+      abs_Gy = -Gy;
+    end else begin
+      abs_Gy = Gy;
+    end
+
+    sum = abs_Gx + abs_Gy;
+
+    if (sum > 255) clamped_sum = 8'hFF;
+    else clamped_sum = sum[7:0];
+
+  end
   always @(posedge clk or negedge rst_n) begin
-    Gx <= (p02 + (p12 << 1) + p22) - (p00 + (p10 << 1) + p20);
-    Gy <= (p20 + (p21 << 1) + p22) - (p00 + (p01 << 1) + p02);
-
-    // abs
-    abs_Gx <= Gx;
-    abs_Gy <= Gy;
-    if (abs_Gx[10] == 1) abs_Gx[10] <= 0;
-    if (abs_Gy[10] == 1) abs_Gy[10] <= 0;
-    sum <= abs_Gx + abs_Gy;
-
-    if (sum > 255) sum <= 255;
-
-    if (in_valid) pixel_out <= sum;
+    if (!rst_n) begin
+      pixel_out <= 0;
+    end else if (in_valid) begin
+      pixel_out <= clamped_sum;
+    end
   end
 
 endmodule
