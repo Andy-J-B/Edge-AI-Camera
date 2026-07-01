@@ -37,6 +37,16 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  uint32_t pixelDataOffset = bmpHeader[10] | (bmpHeader[11] << 8) |
+                             (bmpHeader[12] << 16) | (bmpHeader[13] << 24);
+
+  uint32_t extraBytesToSkip = pixelDataOffset - 54;
+
+  if (extraBytesToSkip > 0) {
+    std::vector<char> skipBuffer(extraBytesToSkip);
+    inFile.read(skipBuffer.data(), extraBytesToSkip);
+  }
+
   // Allocate memory for frame buffers
   std::vector<uint8_t> inputBuffer(WIDTH * HEIGHT);
   std::vector<uint8_t> outputBuffer(WIDTH * HEIGHT, 0);
