@@ -99,6 +99,10 @@ int main(int argc, char **argv) {
     if (top->out_valid) {
       if (outputIndex < (WIDTH * HEIGHT)) {
         outputBuffer[outputIndex] = top->pixel_out;
+        if (outputIndex < 10) {
+          std::cout << "Debug Pixel " << outputIndex << ": "
+                    << (int)top->pixel_out << std::endl;
+        }
         outputIndex++;
       }
     }
@@ -120,27 +124,49 @@ int main(int argc, char **argv) {
 
   // 5. Build Airtight BMP Headers for Export
   uint32_t totalPixelBytes = WIDTH * HEIGHT;
-  uint32_t totalFileSize = 54 + totalPixelBytes;
 
-  bmpHeader[2] = static_cast<uint8_t>(totalFileSize);
-  bmpHeader[3] = static_cast<uint8_t>(totalFileSize >> 8);
-  bmpHeader[4] = static_cast<uint8_t>(totalFileSize >> 16);
-  bmpHeader[5] = static_cast<uint8_t>(totalFileSize >> 24);
+  const int paletteSize = 256 * 4;
+  const int fullHeaderSize = 54 + paletteSize;
+  uint32_t totalFileSize = fullHeaderSize + totalPixelBytes;
 
-  uint32_t exportWidth = WIDTH;
-  uint32_t exportHeight = HEIGHT;
+  std::vector<uint8_t> completeHeader(fullHeaderSize, 0);
 
-  // Overwrite Width (Bytes 18-21)
-  bmpHeader[18] = static_cast<uint8_t>(exportWidth);
-  bmpHeader[19] = static_cast<uint8_t>(exportWidth >> 8);
-  bmpHeader[20] = static_cast<uint8_t>(exportWidth >> 16);
-  bmpHeader[21] = static_cast<uint8_t>(exportWidth >> 24);
+  // Populate standard Bitmap File Header (14 bytes)
+  completeHeader[0] = 'B';
+  completeHeader[1] = 'M';
+  completeHeader[2] = static_cast<uint8_t>(totalFileSize);
+  completeHeader[3] = static_cast<uint8_t>(totalFileSize >> 8);
+  completeHeader[4] = static_cast<uint8_t>(totalFileSize >> 16);
+  completeHeader[5] = static_cast<uint8_t>(totalFileSize >> 24);
+  completeHeader[10] =
+      static_cast<uint8_t>(fullHeaderSize); // Pixel data offset
 
-  // Overwrite Height (Bytes 22-25)
-  bmpHeader[22] = static_cast<uint8_t>(exportHeight);
-  bmpHeader[23] = static_cast<uint8_t>(exportHeight >> 8);
-  bmpHeader[24] = static_cast<uint8_t>(exportHeight >> 16);
-  bmpHeader[25] = static_cast<uint8_t>(exportHeight >> 24);
+  // Populate DIB Info Header (40 bytes)
+  completeHeader[14] = 40; // Info header size
+  completeHeader[18] = static_cast<uint8_t>(WIDTH);
+  completeHeader[19] = static_cast<uint8_t>(WIDTH >> 8);
+  completeHeader[20] = static_cast<uint8_t>(WIDTH >> 16);
+  completeHeader[21] = static_cast<uint8_t>(WIDTH >> 24);
+
+  completeHeader[22] = static_cast<uint8_t>(HEIGHT);
+  completeHeader[23] = static_cast<uint8_t>(HEIGHT >> 8);
+  completeHeader[24] = static_cast<uint8_t>(HEIGHT >> 16);
+  completeHeader[25] = static_cast<uint8_t>(HEIGHT >> 24);
+
+  completeHeader[26] = 1; // Planes
+  completeHeader[28] = 8; // Bits per pixel (8-bit Grayscale)
+  completeHeader[34] = static_cast<uint8_t>(totalPixelBytes); // Image size
+  completeHeader[46] = 0; // Colors in palette (0 defaults to 2^8 = 256)
+
+  // Map index i to uniform BGRA intensities [i, i, i, 0] so 255 becomes pure
+  // white, not pink!
+  for (int i = 0; i < 256; ++i) {
+    int baseOffset = 54 + (i * 4);
+    completeHeader[baseOffset] = i;     // Blue
+    completeHeader[baseOffset + 1] = i; // Green
+    completeHeader[baseOffset + 2] = i; // Red
+    completeHeader[baseOffset + 3] = 0; // Reserved
+  }
 
   // 6. Secure Export Implementation with Explicit Storage Flushing
   std::ofstream outFile(outputPath,
@@ -151,16 +177,17 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  outFile.write(reinterpret_cast<const char *>(bmpHeader), 54);
+  outFile.write(reinterpret_cast<const char *>(completeHeader.data()),
+                fullHeaderSize);
   outFile.write(reinterpret_cast<const char *>(outputBuffer.data()),
                 totalPixelBytes);
 
-  // Flush and close streams completely to prevent file truncation conditions
   outFile.flush();
   outFile.close();
 
-  std::cout << "Output edge detection map successfully exported to: "
-            << outputPath << std::endl;
+  std::cout << "Output edge detection map successfully exported with Grayscale "
+               "palette."
+            << std::endl;
 
   // Final clean tear down
   top->final();
