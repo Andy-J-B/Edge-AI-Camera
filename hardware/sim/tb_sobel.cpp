@@ -127,6 +127,21 @@ int main(int argc, char **argv) {
   bmpHeader[4] = static_cast<uint8_t>(totalFileSize >> 16);
   bmpHeader[5] = static_cast<uint8_t>(totalFileSize >> 24);
 
+  uint32_t exportWidth = WIDTH;
+  uint32_t exportHeight = HEIGHT;
+
+  // Overwrite Width (Bytes 18-21)
+  bmpHeader[18] = static_cast<uint8_t>(exportWidth);
+  bmpHeader[19] = static_cast<uint8_t>(exportWidth >> 8);
+  bmpHeader[20] = static_cast<uint8_t>(exportWidth >> 16);
+  bmpHeader[21] = static_cast<uint8_t>(exportWidth >> 24);
+
+  // Overwrite Height (Bytes 22-25)
+  bmpHeader[22] = static_cast<uint8_t>(exportHeight);
+  bmpHeader[23] = static_cast<uint8_t>(exportHeight >> 8);
+  bmpHeader[24] = static_cast<uint8_t>(exportHeight >> 16);
+  bmpHeader[25] = static_cast<uint8_t>(exportHeight >> 24);
+
   // 6. Secure Export Implementation with Explicit Storage Flushing
   std::ofstream outFile(outputPath,
                         std::ios::out | std::ios::binary | std::ios::trunc);
