@@ -83,15 +83,12 @@ module sobel_filter #(
     end
   end
 
-  reg valid_delay1;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      valid_delay1 <= 1'b0;
       out_valid <= 1'b0;
-    end else if (in_valid) begin
-      valid_delay1 <= lb2_valid;
-      out_valid <= valid_delay1;
+    end else begin
+      out_valid <= lb2_valid;
     end
   end
 
