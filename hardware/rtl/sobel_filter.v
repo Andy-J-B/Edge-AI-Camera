@@ -15,9 +15,8 @@ module sobel_filter #(
 );
   wire [DATA_WIDTH-1:0] lb1_pixel;
   wire [DATA_WIDTH-1:0] lb2_pixel;
-  wire lb1_valid;
-  wire lb2_valid;
 
+  // 1. Data Path Line Buffers
   line_buffer #(
       .WIDTH(WIDTH),
       .DATA_WIDTH(DATA_WIDTH)
@@ -40,28 +39,7 @@ module sobel_filter #(
       .pixel_out(lb2_pixel)
   );
 
-  line_buffer #(
-      .WIDTH(WIDTH),
-      .DATA_WIDTH(1)
-  ) control_pipeline1 (
-      .clk(clk),
-      .rst_n(rst_n),
-      .in_valid(in_valid),
-      .pixel_in(in_valid),
-      .pixel_out(lb1_valid)
-  );
-
-  line_buffer #(
-      .WIDTH(WIDTH),
-      .DATA_WIDTH(1)
-  ) control_pipeline2 (
-      .clk(clk),
-      .rst_n(rst_n),
-      .in_valid(in_valid),
-      .pixel_in(lb1_valid),
-      .pixel_out(lb2_valid)
-  );
-
+  // 2. Spatial Matrix Window Registers
   reg [DATA_WIDTH-1:0] p00, p01, p02;
   reg [DATA_WIDTH-1:0] p10, p11, p12;
   reg [DATA_WIDTH-1:0] p20, p21, p22;
@@ -70,62 +48,70 @@ module sobel_filter #(
     if (!rst_n) begin
       {p00, p01, p02, p10, p11, p12, p20, p21, p22} <= 0;
     end else if (in_valid) begin
-      // horizontal shift
-      p00 <= p01;
-      p01 <= p02;
-      p02 <= lb2_pixel;
-      p10 <= p11;
-      p11 <= p12;
-      p12 <= lb1_pixel;
-      p20 <= p21;
-      p21 <= p22;
-      p22 <= pixel_in;
+      // Horizontal slide window shift
+      p00 <= p01; p01 <= p02; p02 <= lb2_pixel; // Row 0 (Oldest)
+      p10 <= p11; p11 <= p12; p12 <= lb1_pixel; // Row 1
+      p20 <= p21; p21 <= p22; p22 <= pixel_in;  // Row 2 (Current)
     end
   end
 
+  // 3. High-Precision Timing & Pipeline Alignment Control
+  // Latency = 2 full rows (WIDTH * 2) + 2 horizontal cycles to center the 3x3 matrix.
+  reg [11:0] startup_counter;
+  reg frame_primed;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      out_valid <= 1'b0;
+      startup_counter <= 0;
+      frame_primed    <= 1'b0;
+      out_valid       <= 1'b0;
+    end else if (in_valid) begin
+      if (!frame_primed) begin
+        if (startup_counter == 12'((WIDTH * 2) + 2)) begin
+          frame_primed <= 1'b1;
+        end else begin
+          startup_counter <= startup_counter + 1'b1;
+        end
+      end
+      // Match the 1-clock-cycle registration latency of pixel_out
+      out_valid <= frame_primed;
     end else begin
-      out_valid <= lb2_valid;
+      // Maintain continuous validation stream while simulation flushes trailing pixels
+      out_valid <= frame_primed && (startup_counter >= 12'((WIDTH * 2) + 2));
     end
   end
 
+  // 4. Combinational Edge Convolution Arithmetic
   reg signed [10:0] Gx;
   reg signed [10:0] Gy;
   reg signed [10:0] abs_Gx;
   reg signed [10:0] abs_Gy;
   reg signed [10:0] sum;
-
   reg [7:0] clamped_sum;
-  // Horizontal and vertical kernels
+
   always @(*) begin
+    // Apply horizontal and vertical Sobel kernel masks
     Gx = (p02 + (p12 << 1) + p22) - (p00 + (p10 << 1) + p20);
     Gy = (p20 + (p21 << 1) + p22) - (p00 + (p01 << 1) + p02);
 
-    if (Gx < 0) begin
-      abs_Gx = -Gx;
-    end else begin
-      abs_Gx = Gx;
-    end
+    if (Gx < 0) abs_Gx = -Gx;
+    else        abs_Gx = Gx;
 
-    if (Gy < 0) begin
-      abs_Gy = -Gy;
-    end else begin
-      abs_Gy = Gy;
-    end
+    if (Gy < 0) abs_Gy = -Gy;
+    else        abs_Gy = Gy;
 
     sum = abs_Gx + abs_Gy;
 
     if (sum > 255) clamped_sum = 8'hFF;
-    else clamped_sum = sum[7:0];
-
+    else           clamped_sum = sum[7:0];
   end
+
+  // 5. Output Stage Registration
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       pixel_out <= 0;
-    end else if (in_valid) begin
+    end else begin
+      // Always capture the math so trailing stream segments can flush out of the core safely
       pixel_out <= clamped_sum;
     end
   end
