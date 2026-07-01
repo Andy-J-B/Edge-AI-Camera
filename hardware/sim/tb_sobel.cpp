@@ -98,8 +98,10 @@ int main(int argc, char **argv) {
     // handshakes
     if (top->out_valid) {
       if (outputIndex < (WIDTH * HEIGHT)) {
-        outputBuffer[outputIndex] = top->pixel_out;
-        if (outputIndex < 10) {
+        int realPixelIndex = outputIndex - (WIDTH * 2);
+        if (realPixelIndex >= 0 && realPixelIndex < (WIDTH * HEIGHT)) {
+          outputBuffer[realPixelIndex] = top->pixel_out;
+        } else {
           std::cout << "Debug Pixel " << outputIndex << ": "
                     << (int)top->pixel_out << std::endl;
         }
