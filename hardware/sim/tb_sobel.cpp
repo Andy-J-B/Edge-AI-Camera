@@ -112,8 +112,8 @@ int main(int argc, char **argv) {
         if (realPixelIndex >= 0 && realPixelIndex < (WIDTH * HEIGHT)) {
           outputBuffer[realPixelIndex] = top->pixel_out;
         } else {
-          std::cout << "Debug Pixel " << outputIndex << ": "
-                    << (int)top->pixel_out << std::endl;
+          // std::cout << "Debug Pixel " << outputIndex << ": "
+          // << (int)top->pixel_out << std::endl;
         }
         outputIndex++;
       }
