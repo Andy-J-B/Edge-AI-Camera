@@ -1,0 +1,37 @@
+name: Video CI
+
+on:
+  push:
+    paths:
+      - hardware/**
+      - test/**
+      - Makefile
+  pull_request:
+    paths:
+      - hardware/**
+      - test/**
+      - Makefile
+
+jobs:
+  video:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y verilator cmake libopencv-dev
+
+      - name: Configure
+        run: make configure
+
+      - name: Build
+        run: make build
+
+      - name: Process video through Sobel core
+        run: ./build/Vvideo_filter test/assets/test_footage.mp4 test/assets/output_edge.mp4
+
+      - name: Upload output video
+        uses: actions/upload-artifact@v4
+        with:
+          name: output_edge
+          path: test/assets/output_edge.mp4

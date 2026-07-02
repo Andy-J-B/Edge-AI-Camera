@@ -1,5 +1,5 @@
 # Automation shortcuts
-.PHONY: all configure build run clean
+.PHONY: all configure build run run-video clean
 
 all: configure build run
 
@@ -22,6 +22,27 @@ run:
 	@echo "=== Step 2: Executing Verilator Simulation ==="
 	./build/Vsobel_filter test/assets/input_grayscale.bmp test/assets/output_edge.bmp
 
-# 4. Wipe out build infrastructure and local output files
+# 4. Process video footage through the Sobel core (samples every 30th frame)
+run-video: INPUT_MP4 := test/assets/test_footage.mp4
+run-video: FRAME_DIR := /tmp/sobel_frames
+run-video: OUT_DIR := /tmp/sobel_output
+run-video:
+	@echo "=== Step 1: Extracting every 30th frame from $(INPUT_MP4) ==="
+	rm -rf $(FRAME_DIR) $(OUT_DIR)
+	mkdir -p $(FRAME_DIR)/input $(FRAME_DIR)/output
+	ffmpeg -i $(INPUT_MP4) -vf "select=not(mod(n\,30)),scale=640:360,setsar=1" \
+		-fps_mode vfr $(FRAME_DIR)/input/frame_%04d.bmp -loglevel error
+	@echo "=== Step 2: Running Sobel simulation on each frame ==="
+	@for f in $(FRAME_DIR)/input/*.bmp; do \
+		base=$$(basename "$$f"); \
+		echo "  Processing $$base..."; \
+		./build/Vsobel_filter "$$f" "$(FRAME_DIR)/output/$$base"; \
+	done
+	@echo "=== Step 3: Reconstructing output video ==="
+	ffmpeg -framerate 1 -i $(FRAME_DIR)/output/frame_%04d.bmp \
+		-c:v libx264 -pix_fmt yuv420p test/assets/output_edge.mp4 -loglevel error
+	@echo "=== Done: Output at test/assets/output_edge.mp4 ==="
+
+# 5. Wipe out build infrastructure and local output files
 clean:
 	rm -rf build compile_commands.json test/assets/input_grayscale.bmp test/assets/output_edge.bmp
