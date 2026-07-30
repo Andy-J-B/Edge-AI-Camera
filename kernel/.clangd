@@ -1,0 +1,11 @@
+CompileFlags:
+  Remove:
+    - "-fno-allow-store-data-race"
+    - "-mno-fp-ret-in-387"
+    - "-mskip-rax-setup"
+    - "-mindirect-branch=thunk-extern"
+    - "-mindirect-branch-register"
+    - "-fconserve-stack"
+  Add:
+    - "-Wno-unknown-attributes"
+    - "-Wno-unknown-warning-option"

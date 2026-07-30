@@ -1,10 +1,9 @@
 // Platform driver
 
-#include <kernel>
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/init.h>
 #include <linux/module.h>
-
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 static int __init edge_ai_camera_init(void) {
   pr_info("Hello, welcome to Edge AI Camera\n");
@@ -16,6 +15,8 @@ static void __exit edge_ai_camera_exit(void) {
 }
 
 module_init(edge_ai_camera_init);
-module_init(edge_ai_camera_exit);
+module_exit(edge_ai_camera_exit);
 
 MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Junhyuk Andy Bae");
+MODULE_DESCRIPTION("Edge AI Camera");
