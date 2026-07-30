@@ -7,38 +7,42 @@
 #include <media/v4l2-dev.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-fh.h>
-#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-dma-contig.h> // Allocator for contiguous DMA memory
 #include <media/videobuf2-v4l2.h>
 
+// Default camera format parameters (640x360 @ 1 byte per pixel / Y8)
 #define DEFAULT_WIDTH 640
 #define DEFAULT_HEIGHT 360
 #define DEFAULT_BPP 1
 #define DEFAULT_IMAGE_SIZE (DEFAULT_WIDTH * DEFAULT_HEIGHT * DEFAULT_BPP)
-// 640x360 @ 1 byte per pixel
 
+// Helper structure wrapper around standard vb2_v4l2_buffer
 struct edge_cam_buffer {
   struct vb2_v4l2_buffer vb;
   struct list_head list;
-}
+};
 
-// 1. Private device structure
+// 1. Private Device Structure
 struct edge_cam_dev {
   struct platform_device *pdev;
   struct v4l2_device v4l2_dev;
   struct video_device vdev;
-  struct vb2_queue queue;
+  struct vb2_queue queue; // The vb2 queue instance
 
-  struct list_head dma_queue; // list of active queued buffers awaiting HW DMA
-  spinlock_t qlock;           // protect dma_queue
+  struct list_head dma_queue; // List of active queued buffers awaiting HW DMA
+  spinlock_t qlock;           // Protects dma_queue access
 
   u32 width;
   u32 height;
   u32 sizeimage;
-  u32 sequence; // frame counter
+  u32 sequence; // Frame counter
 };
 
-// Called when userspace calls VIDIOC_REQBUFS
-// Asking for buffer allocations
+// ----------------------------------------------------------------------
+// 2. Step 4: Implement vb2_ops Callbacks
+// ----------------------------------------------------------------------
+
+// Called when userspace calls VIDIOC_REQBUFS to ask for buffer allocations
 static int edge_cam_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
                                 unsigned int *nplanes, unsigned int sizes[],
                                 struct device *alloc_devs[]) {
@@ -61,6 +65,7 @@ static int edge_cam_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
   return 0;
 }
 
+// Called before a buffer is enqueued to verify its length/validity
 static int edge_cam_buf_prepare(struct vb2_buffer *vb) {
   struct edge_cam_dev *cam = vb2_get_drvpriv(vb->vb2_queue);
 
@@ -74,6 +79,7 @@ static int edge_cam_buf_prepare(struct vb2_buffer *vb) {
   return 0;
 }
 
+// Called when userspace calls VIDIOC_QBUF to enqueue a buffer for filling
 static void edge_cam_buf_queue(struct vb2_buffer *vb) {
   struct edge_cam_dev *cam = vb2_get_drvpriv(vb->vb2_queue);
   struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
@@ -85,21 +91,26 @@ static void edge_cam_buf_queue(struct vb2_buffer *vb) {
   spin_unlock_irqrestore(&cam->qlock, flags);
 }
 
+// Called on VIDIOC_STREAMON to start frame capture / hardware DMA
 static int edge_cam_start_streaming(struct vb2_queue *vq, unsigned int count) {
   struct edge_cam_dev *cam = vb2_get_drvpriv(vq);
 
   cam->sequence = 0;
   pr_info("Stream started!\n");
+  // (Phase 3: Kick off hardware DMA engine or timer interrupt here)
   return 0;
 }
 
+// Called on VIDIOC_STREAMOFF or process close to stop streaming
 static void edge_cam_stop_streaming(struct vb2_queue *vq) {
   struct edge_cam_dev *cam = vb2_get_drvpriv(vq);
   struct edge_cam_buffer *buf, *node;
   unsigned long flags;
 
   pr_info("Stream stopped!\n");
+  // (Phase 3: Stop HW DMA engine here)
 
+  // Return all queued buffers back to vb2 in ERROR state
   spin_lock_irqsave(&cam->qlock, flags);
   list_for_each_entry_safe(buf, node, &cam->dma_queue, list) {
     list_del(&buf->list);
@@ -108,30 +119,33 @@ static void edge_cam_stop_streaming(struct vb2_queue *vq) {
   spin_unlock_irqrestore(&cam->qlock, flags);
 }
 
-// vb2_ops structure Table
-static const struct vb2_ops edge_cam_qops =
-    {
-        .queue_setup = edge_cam_queue_setup,
-        .buf_prepare = edge_cam_buf_prepare,
-        .buf_queue = edge_cam_buf_queue,
-        .start_streaming = edge_cam_start_streaming,
-        .stop_streaming = edge_cam_stop_streaming,
-        .wait_prepare = vb2_ops_wait_prepare,
-        .wait_finish = vb2_ops_wait_finish,
-}
+// The vb2_ops structure table
+static const struct vb2_ops edge_cam_qops = {
+    .queue_setup = edge_cam_queue_setup,
+    .buf_prepare = edge_cam_buf_prepare,
+    .buf_queue = edge_cam_buf_queue,
+    .start_streaming = edge_cam_start_streaming,
+    .stop_streaming = edge_cam_stop_streaming,
+    .wait_prepare = vb2_ops_wait_prepare,
+    .wait_finish = vb2_ops_wait_finish,
+};
 
-// 2. V4L2 File Operations
+// ----------------------------------------------------------------------
+// 3. V4L2 File Operations (Hooked to vb2 helpers)
+// ----------------------------------------------------------------------
 static const struct v4l2_file_operations edge_cam_fops = {
     .owner = THIS_MODULE,
     .open = v4l2_fh_open,
-    .release = vb2_fop_release,
-    .read = vb2_vb2_fop_read,
-    .mmap = vb2_fop_mmap,
+    .release = vb2_fop_release, // Releases vb2 resources cleanly
+    .read = vb2_fop_read,
+    .mmap = vb2_fop_mmap, // Handles mmap() system call
     .unlocked_ioctl = video_ioctl2,
-    .poll = vb2_fop_poll,
+    .poll = vb2_fop_poll, // Allows poll()/select() on frame events
 };
 
-// 3. Platform Probe Callback (Called when device matches driver)
+// ----------------------------------------------------------------------
+// 4. Step 3: Probe Routine & vb2_queue Initialization
+// ----------------------------------------------------------------------
 static int edge_cam_probe(struct platform_device *pdev) {
   struct edge_cam_dev *cam;
   struct vb2_queue *q;
@@ -193,7 +207,6 @@ err_v4l2:
   return ret;
 }
 
-// 4. Platform Remove Callback
 static void edge_cam_remove(struct platform_device *pdev) {
   struct edge_cam_dev *cam = platform_get_drvdata(pdev);
 
@@ -202,7 +215,6 @@ static void edge_cam_remove(struct platform_device *pdev) {
   pr_info("Unregistered Edge AI Camera\n");
 }
 
-// 6. Platform Driver Definition
 static struct platform_driver edge_cam_driver = {
     .probe = edge_cam_probe,
     .remove = edge_cam_remove,
@@ -212,7 +224,7 @@ static struct platform_driver edge_cam_driver = {
         },
 };
 
-static struct platform_device *pdev_dummmy;
+static struct platform_device *pdev_dummy;
 
 static int __init edge_cam_init(void) {
   int ret = platform_driver_register(&edge_cam_driver);
