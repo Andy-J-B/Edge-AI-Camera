@@ -1,11 +1,15 @@
 CompileFlags:
   Remove:
-    - "-fno-allow-store-data-race"
+    # Fix typos and use wildcards for GCC flags:
+    - "-fno-allow-store-data-races*"
     - "-mno-fp-ret-in-387"
     - "-mskip-rax-setup"
-    - "-mindirect-branch=thunk-extern"
-    - "-mindirect-branch-register"
+    - "-mindirect-branch*"
+    - "-mfunction-return=*"
+    - "-mpreferred-stack-boundary=*"
     - "-fconserve-stack"
+    - "-mrecord-mcount"
+    - "-mno-var-tracking-assignments"
   Add:
     - "-Wno-unknown-attributes"
     - "-Wno-unknown-warning-option"
