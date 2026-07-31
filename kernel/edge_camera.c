@@ -192,8 +192,6 @@ static const struct vb2_ops edge_cam_qops = {
     .buf_queue = edge_cam_buf_queue,
     .start_streaming = edge_cam_start_streaming,
     .stop_streaming = edge_cam_stop_streaming,
-    .wait_prepare = vb2_ops_wait_prepare,
-    .wait_finish = vb2_ops_wait_finish,
 };
 
 static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {
@@ -343,4 +341,5 @@ module_exit(edge_cam_exit);
 
 MODULE_SOFTDEP(
     "pre: videodev videobuf2_core videobuf2_v4l2 videobuf2_dma_contig");
+MODULE_DESCRIPTION("V4L2 driver for Edge AI Camera hardware");
 MODULE_LICENSE("GPL");
