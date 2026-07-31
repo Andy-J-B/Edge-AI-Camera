@@ -38,23 +38,24 @@ struct edge_cam_dev {
   u32 sequence;
 };
 
-// ----------------------------------------------------------------------
-// 1. vb2_ops Callbacks
-// ----------------------------------------------------------------------
-
 static int edge_cam_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
                                 unsigned int *nplanes, unsigned int sizes[],
                                 struct device *alloc_devs[]) {
   struct edge_cam_dev *cam = vb2_get_drv_priv(vq);
 
-  if (*nplanes)
-    return sizes[0] < cam->sizeimage ? -EINVAL : 0;
+  if (*nplanes) {
+    if (sizes[0] < cam->sizeimage) {
+      return -EINVAL;
+    }
+    return 0;
+  }
 
   *nplanes = 1;
   sizes[0] = cam->sizeimage;
 
-  if (*nbuffers < 2)
+  if (*nbuffers < 2) {
     *nbuffers = 2;
+  }
 
   pr_info("vb2_queue_setup: %u buffers allocated, size = %u bytes\n", *nbuffers,
           sizes[0]);
@@ -117,16 +118,8 @@ static const struct vb2_ops edge_cam_qops = {
     .stop_streaming = edge_cam_stop_streaming,
 };
 
-// ----------------------------------------------------------------------
-// 2. IOCTL Operations Table (Fixes "video0: has no ioctl_ops" warning)
-// ----------------------------------------------------------------------
-static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {
-    // Phase 4 will populate format ioctls here
-};
+static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {};
 
-// ----------------------------------------------------------------------
-// 3. V4L2 File Operations
-// ----------------------------------------------------------------------
 static const struct v4l2_file_operations edge_cam_fops = {
     .owner = THIS_MODULE,
     .open = v4l2_fh_open,
@@ -137,17 +130,15 @@ static const struct v4l2_file_operations edge_cam_fops = {
     .poll = vb2_fop_poll,
 };
 
-// ----------------------------------------------------------------------
-// 4. Probe & Remove
-// ----------------------------------------------------------------------
 static int edge_cam_probe(struct platform_device *pdev) {
   struct edge_cam_dev *cam;
   struct vb2_queue *q;
   int ret;
 
   cam = devm_kzalloc(&pdev->dev, sizeof(*cam), GFP_KERNEL);
-  if (!cam)
+  if (!cam) {
     return -ENOMEM;
+  }
 
   cam->pdev = pdev;
   cam->width = DEFAULT_WIDTH;
@@ -160,12 +151,11 @@ static int edge_cam_probe(struct platform_device *pdev) {
 
   platform_set_drvdata(pdev, cam);
 
-  // Register parent v4l2_device
   ret = v4l2_device_register(&pdev->dev, &cam->v4l2_dev);
-  if (ret)
+  if (ret) {
     return ret;
+  }
 
-  // Initialize vb2_queue
   q = &cam->queue;
   memset(q, 0, sizeof(*q));
   q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -185,11 +175,10 @@ static int edge_cam_probe(struct platform_device *pdev) {
     goto err_v4l2;
   }
 
-  // Configure video_device node safely
   memset(&cam->vdev, 0, sizeof(cam->vdev));
   strscpy(cam->vdev.name, "edge-ai-cam", sizeof(cam->vdev.name));
   cam->vdev.fops = &edge_cam_fops;
-  cam->vdev.ioctl_ops = &edge_cam_ioctl_ops; // Attached empty ioctl table
+  cam->vdev.ioctl_ops = &edge_cam_ioctl_ops;
   cam->vdev.v4l2_dev = &cam->v4l2_dev;
   cam->vdev.queue = &cam->queue;
   cam->vdev.lock = &cam->lock;
@@ -200,8 +189,9 @@ static int edge_cam_probe(struct platform_device *pdev) {
   video_set_drvdata(&cam->vdev, cam);
 
   ret = video_register_device(&cam->vdev, VFL_TYPE_VIDEO, -1);
-  if (ret)
+  if (ret) {
     goto err_v4l2;
+  }
 
   pr_info("Registered /dev/video%d cleanly\n", cam->vdev.num);
   return 0;
@@ -214,8 +204,9 @@ err_v4l2:
 static void edge_cam_remove(struct platform_device *pdev) {
   struct edge_cam_dev *cam = platform_get_drvdata(pdev);
 
-  if (!cam)
+  if (!cam) {
     return;
+  }
 
   video_unregister_device(&cam->vdev);
   v4l2_device_unregister(&cam->v4l2_dev);
@@ -235,8 +226,10 @@ static struct platform_device *pdev_dummy;
 
 static int __init edge_cam_init(void) {
   int ret = platform_driver_register(&edge_cam_driver);
-  if (ret)
+
+  if (ret) {
     return ret;
+  }
 
   pdev_dummy = platform_device_register_simple("edge_ai_camera", -1, NULL, 0);
   if (IS_ERR(pdev_dummy)) {
@@ -247,12 +240,15 @@ static int __init edge_cam_init(void) {
 }
 
 static void __exit edge_cam_exit(void) {
-  if (pdev_dummy)
+  if (pdev_dummy) {
     platform_device_unregister(pdev_dummy);
-    pla[118;1:3utform_driver_unregister(&edge_cam_driver);
+  }
+  platform_driver_unregister(&edge_cam_driver);
 }
 
 module_init(edge_cam_init);
 module_exit(edge_cam_exit);
 
+MODULE_SOFTDEP(
+    "pre: videodev videobuf2_core videobuf2_v4l2 videobuf2_dma_contig");
 MODULE_LICENSE("GPL");
