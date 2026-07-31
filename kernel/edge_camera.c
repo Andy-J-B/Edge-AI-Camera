@@ -2,6 +2,7 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <media/v4l2-dev.h>
@@ -26,6 +27,7 @@ struct edge_cam_dev {
   struct v4l2_device v4l2_dev;
   struct video_device vdev;
   struct vb2_queue queue;
+  struct mutex lock;
 
   struct list_head dma_queue;
   spinlock_t qlock;
@@ -148,6 +150,7 @@ static int edge_cam_probe(struct platform_device *pdev) {
 
   INIT_LIST_HEAD(&cam->dma_queue);
   spin_lock_init(&cam->qlock);
+  mutex_init(&cam->lock);
 
   ret = v4l2_device_register(&pdev->dev, &cam->v4l2_dev);
   if (ret)
@@ -163,6 +166,7 @@ static int edge_cam_probe(struct platform_device *pdev) {
   q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
   q->min_queued_buffers = 2; // Fixed field name for newer kernel
   q->dev = &pdev->dev;
+  q->lock = &cam->lock;
 
   ret = vb2_queue_init(q);
   if (ret) {
@@ -174,6 +178,7 @@ static int edge_cam_probe(struct platform_device *pdev) {
   cam->vdev.fops = &edge_cam_fops;
   cam->vdev.v4l2_dev = &cam->v4l2_dev;
   cam->vdev.queue = &cam->queue;
+  cam->vdev.lock = &cam->lock;
   cam->vdev.release = video_device_release_empty;
   cam->vdev.device_caps =
       V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
