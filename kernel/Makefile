@@ -20,7 +20,7 @@ clean:
 
 load:
 	sudo modprobe videodev
-	sudo modprobe videobuf2-core
+	sudo modprobe videobuf2-common
 	sudo modprobe videobuf2-v4l2
 	sudo modprobe videobuf2-dma-contig
 	sudo insmod $(PWD)/$(MODULE_NAME).ko
