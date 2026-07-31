@@ -110,6 +110,14 @@ static void edge_cam_stop_streaming(struct vb2_queue *vq) {
   spin_unlock_irqrestore(&cam->qlock, flags);
 }
 
+static int edge_cam_querycap(struct file *file, void *priv,
+                             struct v4l2_capability *cap) {
+  strscpy(cap->driver, "edge_ai_camera", sizeof(cap->driver));
+  strscpy(cap->card, "Edge AI Camera", sizeof(cap->card));
+  snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:edge_ai_camera");
+  return 0;
+}
+
 static const struct vb2_ops edge_cam_qops = {
     .queue_setup = edge_cam_queue_setup,
     .buf_prepare = edge_cam_buf_prepare,
@@ -118,7 +126,9 @@ static const struct vb2_ops edge_cam_qops = {
     .stop_streaming = edge_cam_stop_streaming,
 };
 
-static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {};
+static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {
+    .vidioc_querycap = edge_cam_querycap,
+};
 
 static const struct v4l2_file_operations edge_cam_fops = {
     .owner = THIS_MODULE,
