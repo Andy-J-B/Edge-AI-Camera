@@ -5,7 +5,7 @@ BUILD_DIR := $(PWD)/build
 
 obj-m := $(MODULE_NAME).o
 
-.PHONY: all clean
+.PHONY: all clean load unload reload
 
 all:
 	@mkdir -p $(BUILD_DIR)
@@ -17,3 +17,15 @@ clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(BUILD_DIR) clean
 	rm -rf $(BUILD_DIR)
 	rm -f $(PWD)/$(MODULE_NAME).ko
+
+load:
+	sudo modprobe videodev
+	sudo modprobe videobuf2-core
+	sudo modprobe videobuf2-v4l2
+	sudo modprobe videobuf2-dma-contig
+	sudo insmod $(PWD)/$(MODULE_NAME).ko
+
+unload:
+	-sudo rmmod $(MODULE_NAME)
+
+reload: unload all load
