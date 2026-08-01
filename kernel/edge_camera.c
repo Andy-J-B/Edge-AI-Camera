@@ -110,11 +110,79 @@ static void edge_cam_stop_streaming(struct vb2_queue *vq) {
   spin_unlock_irqrestore(&cam->qlock, flags);
 }
 
+static const struct v4l2_fmtdesc edge_cam_formats[] = {
+    {
+        .pixelformat = V4L2_PIX_FMT_GREY,
+    },
+};
+
+#define NUM_FORMATS ARRAY_SIZE(edge_cam_formats)
+
 static int edge_cam_querycap(struct file *file, void *priv,
                              struct v4l2_capability *cap) {
   strscpy(cap->driver, "edge_ai_camera", sizeof(cap->driver));
   strscpy(cap->card, "Edge AI Camera", sizeof(cap->card));
   snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:edge_ai_camera");
+  return 0;
+}
+
+static int edge_cam_enum_fmt_vid_cap(struct file *file, void *priv,
+                                     struct v4l2_fmtdesc *f) {
+  if (f->index >= NUM_FORMATS)
+    return -EINVAL;
+
+  f->pixelformat = edge_cam_formats[f->index].pixelformat;
+  return 0;
+}
+
+static int edge_cam_g_fmt_vid_cap(struct file *file, void *priv,
+                                  struct v4l2_format *f) {
+  struct edge_cam_dev *cam = video_drvdata(file);
+
+  f->fmt.pix.width = cam->width;
+  f->fmt.pix.height = cam->height;
+  f->fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
+  f->fmt.pix.field = V4L2_FIELD_NONE;
+  f->fmt.pix.bytesperline = cam->width * DEFAULT_BPP;
+  f->fmt.pix.sizeimage = cam->sizeimage;
+  f->fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+
+  return 0;
+}
+
+static int edge_cam_try_fmt_vid_cap(struct file *file, void *priv,
+                                    struct v4l2_format *f) {
+  /* Clamp resolution to sensible limits */
+  f->fmt.pix.width = clamp_t(u32, f->fmt.pix.width, 160, 1920);
+  f->fmt.pix.height = clamp_t(u32, f->fmt.pix.height, 120, 1080);
+
+  /* For now, force 8-bit grayscale */
+  f->fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
+  f->fmt.pix.field = V4L2_FIELD_NONE;
+  f->fmt.pix.bytesperline = f->fmt.pix.width * DEFAULT_BPP;
+  f->fmt.pix.sizeimage = f->fmt.pix.bytesperline * f->fmt.pix.height;
+  f->fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+
+  return 0;
+}
+
+static int edge_cam_s_fmt_vid_cap(struct file *file, void *priv,
+                                  struct v4l2_format *f) {
+  struct edge_cam_dev *cam = video_drvdata(file);
+  int ret;
+
+  /* Cannot change format while streaming */
+  if (vb2_is_busy(&cam->queue))
+    return -EBUSY;
+
+  ret = edge_cam_try_fmt_vid_cap(file, priv, f);
+  if (ret < 0)
+    return ret;
+
+  cam->width = f->fmt.pix.width;
+  cam->height = f->fmt.pix.height;
+  cam->sizeimage = f->fmt.pix.sizeimage;
+
   return 0;
 }
 
@@ -124,10 +192,24 @@ static const struct vb2_ops edge_cam_qops = {
     .buf_queue = edge_cam_buf_queue,
     .start_streaming = edge_cam_start_streaming,
     .stop_streaming = edge_cam_stop_streaming,
+    .wait_prepare = vb2_ops_wait_prepare,
+    .wait_finish = vb2_ops_wait_finish,
 };
 
 static const struct v4l2_ioctl_ops edge_cam_ioctl_ops = {
     .vidioc_querycap = edge_cam_querycap,
+    .vidioc_enum_fmt_vid_cap = edge_cam_enum_fmt_vid_cap,
+    .vidioc_g_fmt_vid_cap = edge_cam_g_fmt_vid_cap,
+    .vidioc_s_fmt_vid_cap = edge_cam_s_fmt_vid_cap,
+    .vidioc_try_fmt_vid_cap = edge_cam_try_fmt_vid_cap,
+
+    .vidioc_reqbufs = vb2_ioctl_reqbufs,
+    .vidioc_create_bufs = vb2_ioctl_create_bufs,
+    .vidioc_querybuf = vb2_ioctl_querybuf,
+    .vidioc_qbuf = vb2_ioctl_qbuf,
+    .vidioc_dqbuf = vb2_ioctl_dqbuf,
+    .vidioc_streamon = vb2_ioctl_streamon,
+    .vidioc_streamoff = vb2_ioctl_streamoff,
 };
 
 static const struct v4l2_file_operations edge_cam_fops = {
